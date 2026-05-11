@@ -334,6 +334,5 @@ Backup of *.doc*
 ~$*.xlsx*
 *.xlsx
 *.xls
-BD/
 
 # End of https://www.toptal.com/developers/gitignore/api/microsoftoffice
