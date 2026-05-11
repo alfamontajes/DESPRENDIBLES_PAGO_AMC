@@ -1,9 +1,10 @@
+from pathlib import Path
 import pandas as pd
 
 
 class LectorNominaExcel:
     """
-    Clase encargada de leer un archivo Excel de nómina.
+    Clase encargada de leer el archivo Excel de nómina.
 
     Permite mostrar las hojas disponibles, seleccionar una hoja por número,
     detectar automáticamente la fila donde empiezan los encabezados y devolver
@@ -20,7 +21,9 @@ class LectorNominaExcel:
         que se van a extraer del archivo.
         """
 
-        self.ruta_excel = r"BD/NOMINA 2026.xlsx"
+        ruta_base = Path(__file__).resolve().parent.parent
+
+        self.ruta_excel = ruta_base / "BD" / "NOMINA 2026.xlsx"
 
         self.excel = pd.ExcelFile(self.ruta_excel)
 
@@ -30,6 +33,7 @@ class LectorNominaExcel:
             "NOMBRE",
             "DIAS LABORADOS",
             "DESCUENTO PRESTAMOS",
+            "PRESTAMOS A AMC O TPTES.",
             "SUBTOTAL"
         ]
 
@@ -118,8 +122,7 @@ class LectorNominaExcel:
 
         Primero identifica la fila donde están los encabezados reales mediante
         el método buscar_fila_encabezado(). Luego lee nuevamente la hoja usando
-        esa fila como encabezado y normaliza los nombres de las columnas,
-        convirtiéndolos a mayúsculas y eliminando espacios sobrantes.
+        esa fila como encabezado y normaliza los nombres de las columnas.
 
         Returns:
             pandas.DataFrame: DataFrame completo de la hoja seleccionada.
@@ -140,6 +143,14 @@ class LectorNominaExcel:
             .str.strip()
         )
 
+        # Si la columna viene con asterisco al inicio, se normaliza el nombre
+        if "*PRESTAMOS A AMC O TPTES." in df.columns:
+            df = df.rename(
+                columns={
+                    "*PRESTAMOS A AMC O TPTES.": "PRESTAMOS A AMC O TPTES."
+                }
+            )
+
         return df
 
     def obtener_dataframe(self):
@@ -150,6 +161,12 @@ class LectorNominaExcel:
         Luego lee la hoja, valida las columnas necesarias, corta la información
         antes de la fila TOTALES y elimina filas vacías o que no correspondan
         a empleados.
+
+        También convierte los valores numéricos:
+        - SUBTOTAL: número decimal con 2 cifras.
+        - DIAS LABORADOS: número decimal con 2 cifras.
+        - DESCUENTO PRESTAMOS: reemplaza NaN por 0.
+        - PRESTAMOS A AMC O TPTES.: reemplaza NaN por 0.
 
         Returns:
             pandas.DataFrame: DataFrame filtrado solo con los empleados.
@@ -167,10 +184,12 @@ class LectorNominaExcel:
 
         if columnas_faltantes:
             print("\nNo se encontraron estas columnas:")
+
             for col in columnas_faltantes:
                 print(f"- {col}")
 
             print("\nColumnas disponibles en la hoja:")
+
             for col in df.columns:
                 print(f"- {col}")
 
@@ -178,30 +197,26 @@ class LectorNominaExcel:
 
         df_filtrado = df[self.columnas_necesarias].copy()
 
-        # Eliminar filas completamente vacías
         df_filtrado = df_filtrado.dropna(how="all")
 
-        # Eliminar filas donde no haya nombre
         df_filtrado = df_filtrado.dropna(subset=["NOMBRE"])
 
-        # Limpiar la columna NOMBRE
         df_filtrado["NOMBRE"] = (
             df_filtrado["NOMBRE"]
             .astype(str)
             .str.strip()
         )
 
-        # Buscar la fila donde aparece TOTALES
         filas_totales = df_filtrado[
-            df_filtrado["NOMBRE"].str.upper().str.contains("TOTALES", na=False)
+            df_filtrado["NOMBRE"]
+            .str.upper()
+            .str.contains("TOTALES", na=False)
         ]
 
-        # Si encuentra TOTALES, corta el DataFrame antes de esa fila
         if not filas_totales.empty:
             indice_totales = filas_totales.index[0]
             df_filtrado = df_filtrado.loc[:indice_totales - 1]
 
-        # Eliminar posibles filas de notas o textos que no sean empleados
         palabras_a_excluir = [
             "NOTA",
             "SMMLV",
@@ -215,14 +230,16 @@ class LectorNominaExcel:
         patron_exclusion = "|".join(palabras_a_excluir)
 
         df_filtrado = df_filtrado[
-            ~df_filtrado["NOMBRE"].str.upper().str.contains(patron_exclusion, na=False)
+            ~df_filtrado["NOMBRE"]
+            .str.upper()
+            .str.contains(patron_exclusion, na=False)
         ]
 
-        # Convertir columnas numéricas
         columnas_numericas = [
             "SUBTOTAL",
             "DIAS LABORADOS",
-            "DESCUENTO PRESTAMOS"
+            "DESCUENTO PRESTAMOS",
+            "PRESTAMOS A AMC O TPTES."
         ]
 
         for columna in columnas_numericas:
@@ -231,10 +248,39 @@ class LectorNominaExcel:
                 errors="coerce"
             )
 
-        # Opcional: eliminar filas donde SUBTOTAL y DIAS LABORADOS estén vacíos
-        df_filtrado = df_filtrado.dropna(
-            subset=["SUBTOTAL", "DIAS LABORADOS"],
-            how="all"
+        df_filtrado["SUBTOTAL"] = (
+            df_filtrado["SUBTOTAL"]
+            .fillna(0)
+            .astype(float)
+            .round(2)
         )
+
+        df_filtrado["DIAS LABORADOS"] = (
+            df_filtrado["DIAS LABORADOS"]
+            .fillna(0)
+            .astype(float)
+            .round(2)
+        )
+
+        df_filtrado["DESCUENTO PRESTAMOS"] = (
+            df_filtrado["DESCUENTO PRESTAMOS"]
+            .fillna(0)
+            .astype(float)
+            .round(2)
+        )
+
+        df_filtrado["PRESTAMOS A AMC O TPTES."] = (
+            df_filtrado["PRESTAMOS A AMC O TPTES."]
+            .fillna(0)
+            .astype(float)
+            .round(2)
+        )
+
+        df_filtrado = df_filtrado[
+            ~(
+                (df_filtrado["SUBTOTAL"] == 0) &
+                (df_filtrado["DIAS LABORADOS"] == 0)
+            )
+        ]
 
         return df_filtrado
