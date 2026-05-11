@@ -6,19 +6,25 @@ class LectorNominaExcel:
     """
     Clase encargada de leer el archivo Excel de nómina.
 
-    Permite mostrar las hojas disponibles, seleccionar una hoja por número,
-    detectar automáticamente la fila donde empiezan los encabezados y devolver
-    un DataFrame de pandas con las columnas necesarias para el procesamiento
-    de la nómina.
+    Esta clase permite:
+    - Ubicar el archivo Excel dentro de la carpeta BD del proyecto.
+    - Mostrar las hojas disponibles del archivo Excel.
+    - Seleccionar una hoja por número.
+    - Detectar automáticamente la fila donde empiezan los encabezados.
+    - Extraer únicamente las columnas necesarias.
+    - Limpiar filas vacías, totales y notas del archivo.
+    - Convertir columnas numéricas a formato decimal.
+    - Devolver un DataFrame de pandas listo para ser usado en el main.
     """
 
     def __init__(self):
         """
         Inicializa la clase LectorNominaExcel.
 
-        Define la ruta del archivo Excel, carga el archivo para acceder a sus
-        hojas, inicializa la hoja seleccionada como None y define las columnas
-        que se van a extraer del archivo.
+        Construye la ruta del archivo Excel tomando como base la estructura
+        del proyecto. También carga el archivo Excel, inicializa la hoja
+        seleccionada y define las columnas necesarias que se van a extraer
+        del archivo de nómina.
         """
 
         ruta_base = Path(__file__).resolve().parent.parent
@@ -31,17 +37,19 @@ class LectorNominaExcel:
 
         self.columnas_necesarias = [
             "NOMBRE",
+            "SALUD Y PENSION",
             "DIAS LABORADOS",
             "DESCUENTO PRESTAMOS",
             "PRESTAMOS A AMC O TPTES.",
             "SUBTOTAL"
+            
         ]
 
     def mostrar_hojas(self):
         """
         Muestra en pantalla las hojas disponibles en el archivo Excel.
 
-        Las hojas se presentan en forma de lista numerada para que el usuario
+        Las hojas se presentan como una lista numerada para que el usuario
         pueda seleccionar fácilmente una hoja escribiendo su número.
         """
 
@@ -54,9 +62,9 @@ class LectorNominaExcel:
         """
         Permite seleccionar una hoja del archivo Excel mediante su número.
 
-        Primero muestra la lista de hojas disponibles, luego solicita al usuario
-        que escriba el número de la hoja que desea leer. Si el número ingresado
-        es válido, guarda el nombre de la hoja seleccionada en el atributo
+        Primero muestra la lista de hojas disponibles. Después solicita al
+        usuario que escriba el número de la hoja que desea leer. Si el número
+        ingresado es válido, guarda el nombre de la hoja seleccionada en
         self.hoja_seleccionada.
 
         Returns:
@@ -64,7 +72,7 @@ class LectorNominaExcel:
 
         Raises:
             ValueError: Si el usuario no escribe un número válido.
-            ValueError: Si el número seleccionado no existe en la lista de hojas.
+            ValueError: Si el número seleccionado no existe en la lista.
         """
 
         self.mostrar_hojas()
@@ -87,9 +95,9 @@ class LectorNominaExcel:
         """
         Busca la fila donde se encuentran los encabezados reales de la tabla.
 
-        Lee la hoja seleccionada sin asumir encabezados y recorre cada fila hasta
-        encontrar una celda con el texto 'NOMBRE'. Esa fila se toma como la fila
-        de encabezados de la tabla de nómina.
+        Lee la hoja seleccionada sin asumir encabezados y recorre cada fila
+        hasta encontrar una celda con el texto 'NOMBRE'. Esa fila se toma como
+        la fila de encabezados de la tabla de nómina.
 
         Returns:
             int: Índice de la fila donde se encuentran los encabezados.
@@ -122,7 +130,12 @@ class LectorNominaExcel:
 
         Primero identifica la fila donde están los encabezados reales mediante
         el método buscar_fila_encabezado(). Luego lee nuevamente la hoja usando
-        esa fila como encabezado y normaliza los nombres de las columnas.
+        esa fila como encabezado.
+
+        También normaliza los nombres de las columnas convirtiéndolos a
+        mayúsculas y eliminando espacios sobrantes. Si la columna
+        '*PRESTAMOS A AMC O TPTES.' viene con asterisco, se renombra para que
+        quede como 'PRESTAMOS A AMC O TPTES.'.
 
         Returns:
             pandas.DataFrame: DataFrame completo de la hoja seleccionada.
@@ -143,7 +156,6 @@ class LectorNominaExcel:
             .str.strip()
         )
 
-        # Si la columna viene con asterisco al inicio, se normaliza el nombre
         if "*PRESTAMOS A AMC O TPTES." in df.columns:
             df = df.rename(
                 columns={
@@ -157,19 +169,29 @@ class LectorNominaExcel:
         """
         Obtiene el DataFrame final con las columnas necesarias de la nómina.
 
-        Si todavía no se ha seleccionado una hoja, permite seleccionar una.
-        Luego lee la hoja, valida las columnas necesarias, corta la información
-        antes de la fila TOTALES y elimina filas vacías o que no correspondan
-        a empleados.
+        Si todavía no se ha seleccionado una hoja, solicita al usuario que
+        seleccione una hoja por número. Luego lee la hoja, valida que existan
+        las columnas requeridas y devuelve únicamente esas columnas.
 
-        También convierte los valores numéricos:
-        - SUBTOTAL: número decimal con 2 cifras.
-        - DIAS LABORADOS: número decimal con 2 cifras.
-        - DESCUENTO PRESTAMOS: reemplaza NaN por 0.
-        - PRESTAMOS A AMC O TPTES.: reemplaza NaN por 0.
+        También realiza las siguientes limpiezas:
+        - Elimina filas completamente vacías.
+        - Elimina filas sin nombre.
+        - Corta la información antes de la fila TOTALES.
+        - Elimina filas de notas o textos inferiores del archivo.
+        - Convierte columnas numéricas a formato float.
+        - Reemplaza valores vacíos por 0 en columnas numéricas.
 
         Returns:
-            pandas.DataFrame: DataFrame filtrado solo con los empleados.
+            pandas.DataFrame: DataFrame filtrado con las columnas:
+                - NOMBRE
+                - SUBTOTAL
+                - DIAS LABORADOS
+                - DESCUENTO PRESTAMOS
+                - PRESTAMOS A AMC O TPTES.
+                - SALUD Y PENSION
+
+        Raises:
+            ValueError: Si faltan una o más columnas necesarias en el Excel.
         """
 
         if self.hoja_seleccionada is None:
@@ -239,7 +261,8 @@ class LectorNominaExcel:
             "SUBTOTAL",
             "DIAS LABORADOS",
             "DESCUENTO PRESTAMOS",
-            "PRESTAMOS A AMC O TPTES."
+            "PRESTAMOS A AMC O TPTES.",
+            "SALUD Y PENSION"
         ]
 
         for columna in columnas_numericas:
@@ -271,6 +294,13 @@ class LectorNominaExcel:
 
         df_filtrado["PRESTAMOS A AMC O TPTES."] = (
             df_filtrado["PRESTAMOS A AMC O TPTES."]
+            .fillna(0)
+            .astype(float)
+            .round(2)
+        )
+
+        df_filtrado["SALUD Y PENSION"] = (
+            df_filtrado["SALUD Y PENSION"]
             .fillna(0)
             .astype(float)
             .round(2)
